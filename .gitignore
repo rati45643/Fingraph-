@@ -1,0 +1,3 @@
+﻿Fingraph/.venv/
+Fingraph/**/__pycache__/
+*.pyc

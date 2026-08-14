@@ -1,0 +1,7 @@
+# Neo4j database/runtime files
+docker/data/
+neo4j/data/
+**/neo4j/data/
+**/transactions/
+**/neostore.*
+**/*.transaction.db.*
