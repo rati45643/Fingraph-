@@ -10,13 +10,13 @@ The system connects an Apache Flink stream processing pipeline with Apache Kafka
 
 | Day | Module / Component | Output / Capability | Status |
 | :--- | :--- | :--- | :--- |
-| **Day 1** | `flink_processor/flink_job.py` | Flink Stream Execution Pipeline (Source $\to$ Validate $\to$ Window $\to$ Sink) | **VERIFIED** |
-| **Day 2** | `flink_processor/kafka_source.py` | Live Kafka event stream connector on topic `transactions` | **VERIFIED** |
-| **Day 3** | `flink_processor/stream_validator.py` | Stream field validation, decimal/timestamp normalization & DLQ routing | **VERIFIED** |
-| **Day 4** | `flink_processor/neo4j_sink.py` | Idempotent Neo4j batch upsert (`MERGE`) preventing duplicates upon replay | **VERIFIED** |
-| **Day 5** | `database/fraud_queries.cypher`<br>`flink_processor/fraud_detector.py` | Direct relationships, 2-hop pass-through mules, 3-hop layering & fan-in hubs | **VERIFIED** |
-| **Day 6** | `database/risk_queries.cypher`<br>`flink_processor/risk_scorer.py` | 3-hop circular flow detection & explainable initial risk score calculation | **VERIFIED** |
-| **Day 7** | `flink_processor/benchmark_and_test.py` | Latency benchmark (Average & P95) and Cypher execution plan optimization | **VERIFIED** |
+| **Day 1** | `Fingraph/flink_processor/flink_job.py` | Flink Stream Execution Pipeline (Source $\to$ Validate $\to$ Window $\to$ Sink) | **VERIFIED** |
+| **Day 2** | `Fingraph/flink_processor/kafka_source.py` | Live Kafka event stream connector on topic `transactions` | **VERIFIED** |
+| **Day 3** | `Fingraph/flink_processor/stream_validator.py` | Stream field validation, decimal/timestamp normalization & DLQ routing | **VERIFIED** |
+| **Day 4** | `Fingraph/flink_processor/neo4j_sink.py` | Idempotent Neo4j batch upsert (`MERGE`) preventing duplicates upon replay | **VERIFIED** |
+| **Day 5** | `Fingraph/database/fraud_queries.cypher`<br>`Fingraph/flink_processor/fraud_detector.py` | Direct relationships, 2-hop pass-through mules, 3-hop layering & fan-in hubs | **VERIFIED** |
+| **Day 6** | `Fingraph/database/risk_queries.cypher`<br>`Fingraph/flink_processor/risk_scorer.py` | 3-hop circular flow detection & explainable initial risk score calculation | **VERIFIED** |
+| **Day 7** | `Fingraph/flink_processor/benchmark_and_test.py` | Latency benchmark (Average & P95) and Cypher execution plan optimization | **VERIFIED** |
 
 ---
 
@@ -40,10 +40,10 @@ The system connects an Apache Flink stream processing pipeline with Apache Kafka
 Executed against the live Neo4j database:
 
 * **Direct Transfers (`FindDirectTransfers`):** Aggregates direct account-to-account volumes and counts.
-* **2-Hop Intermediary Mules (`FindTwoHopIntermediaryPaths`):** Identified **32** pass-through paths ($A \to B \to C$) where intermediate mule account $B$ forwards received funds with transit delay tracking ($t_1 \le t_2$).
-* **3-Hop Layering Chains (`FindThreeHopLayeringChains`):** Identified **18** deep layering paths ($A \to B \to C \to D$) with timestamp monotonicity ($t_1 \le t_2 \le t_3$).
-* **Structuring Fan-In Hubs (`FindStructuringFanInHubs`):** Identified **10** aggregator hubs receiving deposits from $\ge 3$ distinct accounts (e.g., Hub `ACC_97959AB4` aggregating $\$32,124.01$ from 6 senders).
-* **3-Hop Circular Flows (`DetectCircularFlowRings`):** Detected **6** closed cycles ($A \to B \to C \to A$) with timestamp monotonicity (e.g., `ACC_F32D52F3 -> ACC_7B8E0E3C -> ACC_A9EA88F2 -> ACC_F32D52F3`, average volume $\$19,826.20$).
+* **2-Hop Intermediary Mules (`FindTwoHopIntermediaryPaths`):** Identified pass-through paths ($A \to B \to C$) where intermediate mule account $B$ forwards received funds with transit delay tracking ($t_1 \le t_2$).
+* **3-Hop Layering Chains (`FindThreeHopLayeringChains`):** Identified deep layering paths ($A \to B \to C \to D$) with timestamp monotonicity ($t_1 \le t_2 \le t_3$).
+* **Structuring Fan-In Hubs (`FindStructuringFanInHubs`):** Identified aggregator hubs receiving deposits from $\ge 3$ distinct accounts (e.g., Hub `ACC_97959AB4` aggregating $\$32,124.01$ from 6 senders).
+* **3-Hop Circular Flows (`DetectCircularFlowRings`):** Detected closed cycles ($A \to B \to C \to A$) with timestamp monotonicity (e.g., `ACC_F32D52F3 -> ACC_7B8E0E3C -> ACC_A9EA88F2 -> ACC_F32D52F3`, average volume $\$19,826.20$).
 
 ---
 
@@ -98,7 +98,7 @@ test_day6_circular_flow_and_risk_scoring ... ok
 test_day7_latency_benchmarking_and_optimization ... ok
 
 ----------------------------------------------------------------------
-Ran 7 tests in 1.808s
+Ran 7 tests in 3.551s
 
 OK
 ```
@@ -108,7 +108,7 @@ OK
 ## 7. Strict Week 1 Preservation Audit
 
 All 11 Week 1 files remain **100% untouched** and locked:
-* `README.md` (Original Week 1 documentation preserved)
+* `README.md` (Original Week 1 documentation preserved + Official Week 2 appended)
 * `Fingraph/docker/docker-compose.yml`
 * `Fingraph/database/schema.cypher`
 * `Fingraph/database/sample_ingest.cypher`

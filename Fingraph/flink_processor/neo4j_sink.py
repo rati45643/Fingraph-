@@ -55,19 +55,26 @@ class FlinkNeo4jSink:
         MERGE (src)-[:SENDS]->(t)
         MERGE (t)-[:TRANSFERRED_TO]->(dst)
         """
-        with self.driver.session() as session:
-            session.run(upsert_query, batch=batch)
-
-        logger.info(f"Idempotently upserted batch of {len(batch)} transactions into Neo4j.")
-        return len(batch)
+        try:
+            with self.driver.session() as session:
+                session.run(upsert_query, batch=batch)
+            logger.info(f"Idempotently upserted batch of {len(batch)} transactions into Neo4j.")
+            return len(batch)
+        except Exception as e:
+            logger.warning(f"Neo4j batch upsert failed: {e}")
+            return 0
 
     def get_database_stats(self) -> Dict[str, int]:
         """Fetches current node and relationship counts from Neo4j."""
-        with self.driver.session() as session:
-            stats = {}
-            for label in ["Person", "Bank", "Account", "Transaction"]:
-                res = session.run(f"MATCH (n:{label}) RETURN count(n) AS c").single()
-                stats[label] = res["c"] if res else 0
-            rel_res = session.run("MATCH ()-[r]->() RETURN count(r) AS c").single()
-            stats["relationships"] = rel_res["c"] if rel_res else 0
-            return stats
+        try:
+            with self.driver.session() as session:
+                stats = {}
+                for label in ["Person", "Bank", "Account", "Transaction"]:
+                    res = session.run(f"MATCH (n:{label}) RETURN count(n) AS c").single()
+                    stats[label] = res["c"] if res else 0
+                rel_res = session.run("MATCH ()-[r]->() RETURN count(r) AS c").single()
+                stats["relationships"] = rel_res["c"] if rel_res else 0
+                return stats
+        except Exception as e:
+            logger.warning(f"Could not retrieve Neo4j database stats: {e}")
+            return {"Person": 0, "Bank": 0, "Account": 0, "Transaction": 0, "relationships": 0}
