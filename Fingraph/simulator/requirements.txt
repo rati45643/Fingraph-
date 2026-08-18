@@ -1,4 +1,0 @@
-kafka-python-ng==2.2.3
-faker==20.1.0
-neo4j==5.14.1
-networkx==3.6.1
