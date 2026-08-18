@@ -115,6 +115,91 @@ Fingraph/
 - **`Fingraph/flink_processor/benchmark_and_test.py`**: Performance benchmarking suite measuring end-to-end stream latency, ingestion throughput, and Cypher query execution times.
 - **`Fingraph/flink_processor/test_flink_pipeline.py`**: Comprehensive automated test suite verifying all Day 1 through Day 7 components.
 
+---
+
+## How to Run Week 2 (Execution Guide)
+
+Follow these step-by-step instructions to run the entire Week 2 pipeline:
+
+### Step 1: Start the Infrastructure (Docker)
+Ensure Docker Desktop is running, then spin up Zookeeper, Kafka, and Neo4j:
+```powershell
+docker compose -f docker/docker-compose.yml up -d
+```
+
+### Step 2: Initialize Neo4j Schema & Constraints
+Apply unique constraints and indexes for optimal graph query performance and idempotent upserts:
+```powershell
+Get-Content database\schema.cypher | docker exec -i neo4j cypher-shell -u neo4j -p password
+```
+
+### Step 3: Start the Transaction Stream Generator (Producer)
+In **Terminal 1** (activate `.venv`), start generating transactions (normal traffic, 2-hop mules, 3-hop layering, structuring fan-in, and circular flows) and streaming them to Kafka:
+```powershell
+python simulator\main.py
+```
+
+### Step 4: Run the Flink Stream Processing Pipeline (Consumer & Graph Sink)
+In **Terminal 2** (activate `.venv`), run the Flink stream processor to consume from Kafka, validate/clean payloads, route malformed items to DLQ, and idempotently upsert into Neo4j:
+```powershell
+python flink_processor\flink_job.py
+```
+
+### Step 5: Run Fraud Pattern Detection (Day 5)
+In **Terminal 3** (or after streaming transactions), run the Cypher fraud investigation detector:
+```powershell
+python flink_processor\fraud_detector.py
+```
+This queries Neo4j for:
+- Direct account transfers and aggregate flows
+- 2-Hop pass-through intermediary mule accounts ($A \to B \to C$)
+- 3-Hop layering chains ($A \to B \to C \to D$)
+- Structuring / smurfing fan-in collector hubs ($\ge 3$ senders into 1 account)
+
+### Step 6: Run Circular Flow Detection & AML Risk Scoring (Day 6)
+Calculate composite AML risk scores ($0 - 100$) and detect circular loops:
+```powershell
+python flink_processor\risk_scorer.py
+```
+This detects $A \to B \to C \to A$ cycles, calculates account risk levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), and persists `a.risk_score` and `a.risk_level` properties directly onto `:Account` nodes in Neo4j.
+
+### Step 7: Run Performance & Latency Benchmarks (Day 7)
+Measure ingestion latencies (Average & P95), throughput, and Cypher query execution times against the official SLAs:
+```powershell
+python flink_processor\benchmark_and_test.py
+```
+
+### Step 8: Run the Automated Test Suite (7/7 Days)
+Run the full automated test suite verifying all 7 days of the curriculum:
+```powershell
+python -m unittest flink_processor/test_flink_pipeline.py -v
+```
+
+### Step 9: Visual Investigation in Neo4j Browser
+Open **[http://localhost:7474](http://localhost:7474)** (Username: `neo4j`, Password: `password`) and run visual queries:
+
+- **Visualize Full Transaction Graph**:
+  ```cypher
+  MATCH (src:Account)-[s:SENDS]->(t:Transaction)-[tr:TRANSFERRED_TO]->(dst:Account)
+  RETURN src, s, t, tr, dst LIMIT 100;
+  ```
+- **Visualize Circular Flow Cycles ($A \to B \to C \to A$)**:
+  ```cypher
+  MATCH (a:Account)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(b:Account)
+  MATCH (b)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(c:Account)
+  MATCH (c)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
+  RETURN a, b, c, t1, t2, t3;
+  ```
+- **Query High-Risk Accounts Ranked by Score**:
+  ```cypher
+  MATCH (a:Account)
+  WHERE a.risk_score IS NOT NULL
+  RETURN a.account_id AS Account, a.risk_score AS Score, a.risk_level AS Level
+  ORDER BY a.risk_score DESC LIMIT 20;
+  ```
+
+---
+
 ## Flink Processing Stages
 
 The streaming pipeline executes 7 discrete stages:

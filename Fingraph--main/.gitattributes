@@ -1,0 +1,1 @@
+docker/data/neo4j/transactions/**/*.db* filter=lfs diff=lfs merge=lfs -text
