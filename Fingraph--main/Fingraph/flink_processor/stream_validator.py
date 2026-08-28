@@ -26,24 +26,47 @@ class StreamValidator:
             self._route_to_dlq(event, reason)
             return False, None, reason
 
-        # 1. Check mandatory fields
-        for field in self.MANDATORY_FIELDS:
-            if field not in event or event[field] is None:
-                reason = f"Missing mandatory field: '{field}'"
-                self._route_to_dlq(event, reason)
-                return False, None, reason
+        # 1. Resolve source and destination account fields with alias support
+        src = event.get("source_account_id") if event.get("source_account_id") is not None else event.get("source_account")
+        dst = event.get("destination_account_id") if event.get("destination_account_id") is not None else (event.get("dest_account") or event.get("destination_account"))
+
+        # Check mandatory fields
+        if "transaction_id" not in event or event["transaction_id"] is None:
+            reason = "Missing mandatory field: 'transaction_id'"
+            self._route_to_dlq(event, reason)
+            return False, None, reason
+
+        if src is None:
+            reason = "Missing mandatory field: 'source_account_id'"
+            self._route_to_dlq(event, reason)
+            return False, None, reason
+
+        if dst is None:
+            reason = "Missing mandatory field: 'destination_account_id'"
+            self._route_to_dlq(event, reason)
+            return False, None, reason
+
+        if "amount" not in event or event["amount"] is None:
+            reason = "Missing mandatory field: 'amount'"
+            self._route_to_dlq(event, reason)
+            return False, None, reason
+
+        if "timestamp" not in event or event["timestamp"] is None:
+            reason = "Missing mandatory field: 'timestamp'"
+            self._route_to_dlq(event, reason)
+            return False, None, reason
 
         tx_id = str(event["transaction_id"]).strip()
-        src = str(event["source_account_id"]).strip()
-        dst = str(event["destination_account_id"]).strip()
+        src_id = str(src).strip()
+        dst_id = str(dst).strip()
 
-        if not tx_id or not src or not dst:
+        if not tx_id or not src_id or not dst_id:
             reason = "IDs cannot be empty strings."
             self._route_to_dlq(event, reason)
             return False, None, reason
 
-        if src == dst:
-            reason = f"Self-transfer detected (source == destination: '{src}')."
+        if src_id == dst_id:
+            reason = f"Self-transfer detected (source == destination: '{src_id}')."
             self._route_to_dlq(event, reason)
             return False, None, reason
 
@@ -75,8 +98,8 @@ class StreamValidator:
         # Build clean normalized record
         normalized = {
             "transaction_id": tx_id,
-            "source_account_id": src,
-            "destination_account_id": dst,
+            "source_account_id": src_id,
+            "destination_account_id": dst_id,
             "amount": amount_norm,
             "timestamp": ts_norm,
             "is_suspicious": bool(event.get("is_suspicious", False))

@@ -1,4 +1,3 @@
-cat > database/risk_queries.cypher <<'EOF'
 /*
 FinGraph Week 2 - Day 6
 Circular Flow Detection & AML Risk Queries
@@ -9,9 +8,7 @@ DetectCircularFlowRings
 Detects 3-hop circular flows:
 A -> B -> C -> A
 */
-MATCH (a:Account)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(b:Account)
-MATCH (b)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(c:Account)
-MATCH (c)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
+MATCH (a:Account)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(b:Account)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(c:Account)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
 WHERE a <> b
   AND b <> c
   AND a <> c
@@ -55,9 +52,7 @@ WITH a,
        WHEN t_in.is_suspicious = true THEN t_in
      END) AS sus_in
 
-OPTIONAL MATCH (a)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(n1:Account)
-MATCH (n1)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(n2:Account)
-MATCH (n2)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
+OPTIONAL MATCH (a)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(n1:Account)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(n2:Account)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
 WHERE a <> n1
   AND n1 <> n2
   AND a <> n2
@@ -124,4 +119,3 @@ SET a.risk_level =
 RETURN a.account_id AS account_id,
        a.risk_score AS risk_score,
        a.risk_level AS risk_level;
-EOF

@@ -1,4 +1,3 @@
-cat > database/fraud_queries.cypher <<'EOF'
 /*
 FinGraph Week 2 - Day 5
 Fraud Investigation Queries
@@ -84,4 +83,3 @@ RETURN hub.account_id AS hub_account,
        sender_accounts,
        tx_ids
 ORDER BY distinct_senders DESC, total_aggregated DESC;
-EOF

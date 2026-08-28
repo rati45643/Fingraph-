@@ -159,16 +159,18 @@ class TestOfficialFlinkWeek2(unittest.TestCase):
             self.skipTest("Live Neo4j database not reachable.")
 
         detector = FlinkFraudDetector()
-        directs = detector.find_direct_transfers(limit=10)
-        two_hops = detector.find_two_hop_intermediaries()
-        layering = detector.find_three_hop_layering()
-        hubs = detector.find_structuring_fan_in_hubs(min_senders=2)
+        try:
+            directs = detector.find_direct_transfers(limit=10)
+            two_hops = detector.find_two_hop_intermediaries()
+            layering = detector.find_three_hop_layering()
+            hubs = detector.find_structuring_fan_in_hubs(min_senders=2)
 
-        self.assertIsInstance(directs, list)
-        self.assertIsInstance(two_hops, list)
-        self.assertIsInstance(layering, list)
-        self.assertIsInstance(hubs, list)
-        detector.close()
+            self.assertIsInstance(directs, list)
+            self.assertIsInstance(two_hops, list)
+            self.assertIsInstance(layering, list)
+            self.assertIsInstance(hubs, list)
+        finally:
+            detector.close()
 
     # ------------------------------------------------------------------------
     # DAY 6: Circular Flow Detection & Initial Risk Scoring
@@ -187,19 +189,31 @@ class TestOfficialFlinkWeek2(unittest.TestCase):
         if not self.is_db_online:
             self.skipTest("Live Neo4j database not reachable.")
 
+        # Seed a 3-hop circular flow test pattern (A -> B -> C -> A)
+        now_ts = int(time.time() * 1000)
+        cycle_batch = [
+            {"transaction_id": f"cyc-tx-1-{now_ts}", "source_account_id": "ACC_CYC_A", "destination_account_id": "ACC_CYC_B", "amount": 8000.00, "timestamp": now_ts + 10, "is_suspicious": True},
+            {"transaction_id": f"cyc-tx-2-{now_ts}", "source_account_id": "ACC_CYC_B", "destination_account_id": "ACC_CYC_C", "amount": 8000.00, "timestamp": now_ts + 20, "is_suspicious": True},
+            {"transaction_id": f"cyc-tx-3-{now_ts}", "source_account_id": "ACC_CYC_C", "destination_account_id": "ACC_CYC_A", "amount": 8000.00, "timestamp": now_ts + 30, "is_suspicious": True},
+        ]
+        self.sink.upsert_transaction_batch(cycle_batch)
+
         scorer = FlinkRiskScorer()
-        cycles = scorer.detect_circular_flows()
-        self.assertIsInstance(cycles, list)
+        try:
+            cycles = scorer.detect_circular_flows()
+            self.assertIsInstance(cycles, list)
+            self.assertGreater(len(cycles), 0, "Should detect at least one circular flow ring.")
 
-        scores = scorer.calculate_and_persist_risk_scores()
-        self.assertIsInstance(scores, list)
-        self.assertGreater(len(scores), 0, "Should calculate risk scores for existing accounts.")
+            scores = scorer.calculate_and_persist_risk_scores()
+            self.assertIsInstance(scores, list)
+            self.assertGreater(len(scores), 0, "Should calculate risk scores for existing accounts.")
 
-        # Verify that risk_score property is populated on :Account nodes
-        with scorer.driver.session() as session:
-            res = session.run("MATCH (a:Account) WHERE a.risk_score IS NOT NULL RETURN count(a) AS c").single()
-            self.assertGreater(res["c"], 0, "Account nodes must have risk_score persisted.")
-        scorer.close()
+            # Verify that risk_score property is populated on :Account nodes
+            with scorer.driver.session() as session:
+                res = session.run("MATCH (a:Account) WHERE a.risk_score IS NOT NULL RETURN count(a) AS c").single()
+                self.assertGreater(res["c"], 0, "Account nodes must have risk_score persisted.")
+        finally:
+            scorer.close()
 
     # ------------------------------------------------------------------------
     # DAY 7: Latency Benchmarking & Performance Optimization

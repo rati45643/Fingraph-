@@ -58,6 +58,8 @@ class Transaction:
             "transaction_id": self.transaction_id,
             "amount": self.amount,
             "timestamp": self.timestamp,
+            "source_account_id": self.source_account,
+            "destination_account_id": self.dest_account,
             "source_account": self.source_account,
             "dest_account": self.dest_account,
             "is_suspicious": self.is_suspicious

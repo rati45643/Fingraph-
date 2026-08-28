@@ -27,6 +27,14 @@ class FlinkFraudDetector:
         if self.driver:
             self.driver.close()
 
+    def verify_connectivity(self) -> bool:
+        try:
+            self.driver.verify_connectivity()
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j connectivity check failed: {e}")
+            return False
+
     def find_direct_transfers(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Returns direct transfer summaries between accounts."""
         query = """
@@ -38,8 +46,12 @@ class FlinkFraudDetector:
         ORDER BY total_amount DESC
         LIMIT $limit
         """
-        with self.driver.session() as session:
-            return session.run(query, limit=limit).data()
+        try:
+            with self.driver.session() as session:
+                return session.run(query, limit=limit).data()
+        except Exception as e:
+            logger.warning(f"Failed to query direct transfers: {e}")
+            return []
 
     def find_two_hop_intermediaries(self) -> List[Dict[str, Any]]:
         """Finds 2-hop pass-through intermediary mules (A -> B -> C)."""
@@ -59,8 +71,12 @@ class FlinkFraudDetector:
                (t2.timestamp - t1.timestamp) AS transit_delay_ms
         ORDER BY incoming_amount DESC
         """
-        with self.driver.session() as session:
-            return session.run(query).data()
+        try:
+            with self.driver.session() as session:
+                return session.run(query).data()
+        except Exception as e:
+            logger.warning(f"Failed to query 2-hop intermediaries: {e}")
+            return []
 
     def find_three_hop_layering(self) -> List[Dict[str, Any]]:
         """Finds 3-hop layering chains (A -> B -> C -> D)."""
@@ -82,8 +98,12 @@ class FlinkFraudDetector:
                (t3.timestamp - t1.timestamp) AS total_duration_ms
         ORDER BY hop1_amount DESC
         """
-        with self.driver.session() as session:
-            return session.run(query).data()
+        try:
+            with self.driver.session() as session:
+                return session.run(query).data()
+        except Exception as e:
+            logger.warning(f"Failed to query 3-hop layering: {e}")
+            return []
 
     def find_structuring_fan_in_hubs(self, min_senders: int = 3) -> List[Dict[str, Any]]:
         """Finds structuring fan-in hubs aggregating from multiple accounts."""
@@ -104,5 +124,43 @@ class FlinkFraudDetector:
                tx_ids
         ORDER BY distinct_senders DESC, total_aggregated DESC
         """
-        with self.driver.session() as session:
-            return session.run(query, min_senders=min_senders).data()
+        try:
+            with self.driver.session() as session:
+                return session.run(query, min_senders=min_senders).data()
+        except Exception as e:
+            logger.warning(f"Failed to query structuring fan-in hubs: {e}")
+            return []
+
+if __name__ == "__main__":
+    detector = FlinkFraudDetector()
+    try:
+        print("=" * 70)
+        print("  FinGraph Flink Fraud Detector (Day 5)")
+        print("=" * 70)
+        if not detector.verify_connectivity():
+            print("\n[!] Neo4j database is not reachable at bolt://localhost:7687.")
+            print("    Please ensure Docker container is running: docker compose -f docker/docker-compose.yml up -d")
+            print("=" * 70)
+        else:
+            directs = detector.find_direct_transfers(limit=5)
+            print(f"[*] Direct Transfers (Sample: {len(directs)}):")
+            for d in directs:
+                print(f"    - {d['source_account']} -> {d['destination_account']}: {d['transfer_count']} txs (${d['total_amount']})")
+
+            two_hops = detector.find_two_hop_intermediaries()
+            print(f"\n[*] 2-Hop Pass-Through Intermediaries: {len(two_hops)} detected.")
+            for m in two_hops[:5]:
+                print(f"    - {m['source_account']} -> [Mule: {m['intermediary_mule']}] -> {m['destination_account']} (In: ${m['incoming_amount']}, Out: ${m['outgoing_amount']})")
+
+            layering = detector.find_three_hop_layering()
+            print(f"\n[*] 3-Hop Layering Chains: {len(layering)} detected.")
+            for l in layering[:5]:
+                print(f"    - {l['originator']} -> {l['hop1_intermediary']} -> {l['hop2_intermediary']} -> {l['ultimate_beneficiary']}")
+
+            hubs = detector.find_structuring_fan_in_hubs(min_senders=2)
+            print(f"\n[*] Structuring Fan-In Hubs: {len(hubs)} detected.")
+            for h in hubs[:5]:
+                print(f"    - Hub: {h['hub_account']} aggregated from {h['distinct_senders']} accounts (${h['total_aggregated']})")
+            print("=" * 70)
+    finally:
+        detector.close()

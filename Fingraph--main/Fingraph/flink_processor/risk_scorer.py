@@ -26,12 +26,18 @@ class FlinkRiskScorer:
         if self.driver:
             self.driver.close()
 
+    def verify_connectivity(self) -> bool:
+        try:
+            self.driver.verify_connectivity()
+            return True
+        except Exception as e:
+            logger.warning(f"Neo4j connectivity check failed: {e}")
+            return False
+
     def detect_circular_flows(self) -> List[Dict[str, Any]]:
         """Detects 3-hop closed circular flows (A -> B -> C -> A)."""
         query = """
-        MATCH (a:Account)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(b:Account)
-        MATCH (b)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(c:Account)
-        MATCH (c)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
+        MATCH (a:Account)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(b:Account)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(c:Account)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
         WHERE a <> b AND b <> c AND a <> c
           AND t1.timestamp <= t2.timestamp
           AND t2.timestamp <= t3.timestamp
@@ -48,8 +54,12 @@ class FlinkRiskScorer:
                (t3.timestamp - t1.timestamp) AS cycle_duration_ms
         ORDER BY average_cycle_amount DESC
         """
-        with self.driver.session() as session:
-            return session.run(query).data()
+        try:
+            with self.driver.session() as session:
+                return session.run(query).data()
+        except Exception as e:
+            logger.warning(f"Failed to detect circular flows: {e}")
+            return []
 
     def calculate_and_persist_risk_scores(self) -> List[Dict[str, Any]]:
         """
@@ -67,9 +77,7 @@ class FlinkRiskScorer:
              count(DISTINCT CASE WHEN t_out.is_suspicious = true THEN t_out END) AS sus_out,
              count(DISTINCT CASE WHEN t_in.is_suspicious = true THEN t_in END) AS sus_in
 
-        OPTIONAL MATCH (a)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(n1:Account)
-        MATCH (n1)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(n2:Account)
-        MATCH (n2)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
+        OPTIONAL MATCH (a)-[:SENDS]->(t1:Transaction)-[:TRANSFERRED_TO]->(n1:Account)-[:SENDS]->(t2:Transaction)-[:TRANSFERRED_TO]->(n2:Account)-[:SENDS]->(t3:Transaction)-[:TRANSFERRED_TO]->(a)
         WHERE a <> n1 AND n1 <> n2 AND a <> n2 AND t1.timestamp <= t2.timestamp AND t2.timestamp <= t3.timestamp
         WITH a, out_count, in_count, total_outflow, total_inflow, (sus_out + sus_in) AS total_sus_txs,
              count(DISTINCT t1) AS cycle_count
@@ -104,8 +112,36 @@ class FlinkRiskScorer:
                risk_level
         ORDER BY risk_score DESC
         """
-        with self.driver.session() as session:
-            records = session.run(calc_query).data()
+        try:
+            with self.driver.session() as session:
+                records = session.run(calc_query).data()
+            logger.info(f"Calculated and persisted risk scores for {len(records)} accounts in Neo4j.")
+            return records
+        except Exception as e:
+            logger.warning(f"Failed to calculate and persist risk scores: {e}")
+            return []
 
-        logger.info(f"Calculated and persisted risk scores for {len(records)} accounts in Neo4j.")
-        return records
+if __name__ == "__main__":
+    scorer = FlinkRiskScorer()
+    try:
+        print("=" * 70)
+        print("  FinGraph Flink Risk Scorer (Day 6)")
+        print("=" * 70)
+        if not scorer.verify_connectivity():
+            print("\n[!] Neo4j database is not reachable at bolt://localhost:7687.")
+            print("    Please ensure Docker container is running: docker compose -f docker/docker-compose.yml up -d")
+            print("=" * 70)
+        else:
+            cycles = scorer.detect_circular_flows()
+            print(f"[*] Detected {len(cycles)} circular flow ring(s).")
+            for i, c in enumerate(cycles[:5], 1):
+                print(f"    {i}. {c['account_A']} -> {c['account_B']} -> {c['account_C']} -> {c['account_A']} (Avg: ${c['average_cycle_amount']}, Duration: {c['cycle_duration_ms']}ms)")
+
+            scores = scorer.calculate_and_persist_risk_scores()
+            print(f"\n[*] Calculated and persisted risk scores for {len(scores)} account(s).")
+            print("\nTop High-Risk Accounts:")
+            for s in scores[:10]:
+                print(f"    - Account: {s['account_id']:<18} Score: {s['risk_score']:<5} Level: {s['risk_level']:<8} Cycles: {s['cycle_count']} SusTxs: {s['total_sus_txs']}")
+            print("=" * 70)
+    finally:
+        scorer.close()
