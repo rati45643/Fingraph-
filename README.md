@@ -434,3 +434,158 @@ OK
 - **Latency benchmark**
 - **Week 2 test verification**
 
+Week3:
+# FinGraph 🏦 Network-Based Financial Fraud Detection & AML Streaming Engine
+
+FinGraph is an end-to-end Financial Transaction Graph Analysis and Anti-Money Laundering (AML) Streaming Engine. It integrates **Apache Kafka**, **Apache Flink**, **Neo4j Graph Database**, **Neo4j Graph Data Science (GDS)**, and an interactive **Streamlit Dashboard** to simulate, process, detect, and visualize complex financial fraud patterns in real-time.
+
+---
+
+## 🏗️ System Architecture & Stack
+
+- **Data Generator / Simulator**: Simulates ordinary transactions and complex fraud patterns (Syndicate Funnels, Multi-Hop Intermediary Mules, Circular Flow Rings).
+- **Message Broker**: **Apache Kafka** (`localhost:9092`) for real-time event streaming.
+- **Stream Processing**: **Apache Flink Processor** for stream validation, dead-letter queue (DLQ) handling, micro-batching, and Neo4j sink ingestion.
+- **Graph Database**: **Neo4j 5.x** (`bolt://localhost:7687`) with **APOC** and **Graph Data Science (GDS)** plugins enabled.
+- **Graph Analytics (GDS)**: PageRank centrality, Weakly Connected Components (WCC), and Louvain Community Detection algorithms.
+- **AML Dashboard**: **Streamlit** & **PyVis** interactive graph visualization dashboard (`http://localhost:8501`).
+
+---
+
+## ⚡ Quick Start & Execution Guide
+
+Follow these steps in order to launch the complete FinGraph Week 3 pipeline.
+
+### Step 1: Start Docker Infrastructure (Prerequisite)
+
+Before running any Python services, launch the Docker containers (Zookeeper, Kafka, and Neo4j).
+
+```bash
+# Navigate to the project directory
+cd Fingraph
+
+# Start Docker containers in detached mode
+docker compose -f docker/docker-compose.yml up -d
+```
+
+> [!NOTE]
+> Ensure Neo4j is ready at `bolt://localhost:7687` (HTTP: `http://localhost:7474`, Username: `neo4j`, Password: `password`) and Kafka is listening on `localhost:9092`.
+
+---
+
+### Terminal 1: Run Transaction Simulator
+
+Open **Terminal 1** and start the real-time financial transaction data generator:
+
+```bash
+cd Fingraph
+python simulator/main.py
+```
+
+*This process continuously generates ordinary transactions as well as complex fraud patterns (funnels, multi-hops, circular flows) and streams them to Kafka.*
+
+---
+
+### Terminal 2: Run Week 3 Processing, Fraud Detection, GDS & Dashboard
+
+Open a **New Terminal (Terminal 2)** and execute steps **1 through 6 sequentially** in this single terminal:
+
+#### 1. Run Flink Stream Ingestion Job
+Consumes transaction events from Kafka, validates schemas, handles DLQ, and streams data into Neo4j in micro-batches:
+```bash
+python flink_processor/flink_job.py
+```
+*(Windows format: `python flink_processor\flink_job.py`)*
+
+#### 2. Run Fraud Detector Engine
+Queries Neo4j graph topology to identify 2-hop pass-through mules, 3-hop layering chains, and structuring fan-in hubs:
+```bash
+python flink_processor/fraud_detector.py
+```
+*(Windows format: `python flink_processor\fraud_detector.py`)*
+
+#### 3. Run Risk Scorer Engine
+Detects 3-hop circular flow round-tripping rings and calculates composite account risk scores (persisted directly to Neo4j):
+```bash
+python flink_processor/risk_scorer.py
+```
+*(Windows format: `python flink_processor\risk_scorer.py`)*
+
+#### 4. Run Graph Data Science (GDS) Analytics Engine
+Projects the in-memory transaction graph into Neo4j GDS and executes PageRank, WCC, and Louvain algorithms:
+```bash
+python gds_analytics/gds_runner.py
+```
+*(Windows format: `python gds_analytics\gds_runner.py`)*
+
+#### 5 & 6. Install Dashboard Dependencies & Launch Streamlit App
+Install dashboard dependencies and start the interactive Streamlit AML Investigation application:
+```bash
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
+```
+*(Or navigate into dashboard directory: `cd dashboard` -> `pip install -r requirements.txt` -> `streamlit run app.py`)*
+
+Access the interactive web dashboard in your browser at **`http://localhost:8501`**.
+
+---
+
+## 🔥 Key Features & Extra Functionality
+
+### 1. Advanced Fraud Pattern Detection
+- **2-Hop Intermediary Mules**: Pinpoints rapid pass-through accounts ($A \rightarrow B \rightarrow C$).
+- **3-Hop Layering Chains**: Traces multi-layer money laundering chains ($A \rightarrow B \rightarrow C \rightarrow D$).
+- **Circular Flow Rings**: Identifies closed round-tripping cycles ($A \rightarrow B \rightarrow C \rightarrow A$).
+- **Structuring Fan-In Hubs**: Highlights high-density aggregation nodes receiving funds from multiple senders.
+
+### 2. Graph Data Science (GDS) Algorithms
+- **PageRank Centrality**: Ranks accounts based on financial influence and transactional volume.
+- **Weakly Connected Components (WCC)**: Discovers disconnected sub-networks and isolated laundering clusters.
+- **Louvain Community Detection**: Uncovers hidden collusive fraud syndicates.
+
+### 3. Interactive AML Investigation Dashboard
+- **Live KPI Overview**: Real-time metrics for accounts, transactions, high-risk accounts, and suspicious flags.
+- **PyVis Interactive Network Visualizer**: Drag-and-drop interactive node-link graph explorer.
+- **Risk Profiler**: Filter and inspect accounts by risk tier (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+
+### 4. Testing & Benchmarking Tools (Extra Utilities)
+Run additional test scripts and benchmarks to verify system components:
+
+```bash
+# Test Stream Validation & Flink Pipeline
+python flink_processor/test_flink_pipeline.py
+
+# Run Throughput & Performance Benchmarks
+python flink_processor/benchmark_and_test.py
+
+# Test Graph Data Science (GDS) Suite
+python gds_analytics/test_gds_pipeline.py
+
+# Kafka Consumer Direct Inspection Test
+python simulator/consumer_test.py
+```
+
+---
+
+## 🛠️ Services & Port Reference
+
+| Service | Port | Protocol / URL | Credentials / Details |
+| :--- | :--- | :--- | :--- |
+| **Neo4j Browser UI** | `7474` | `http://localhost:7474` | User: `neo4j` \| Password: `password` |
+| **Neo4j Bolt Protocol** | `7687` | `bolt://localhost:7687` | Graph Database & GDS Connection |
+| **Apache Kafka Broker** | `9092` | `localhost:9092` | Event Streaming Broker |
+| **Zookeeper** | `2181` | `localhost:2181` | Kafka Cluster Manager |
+| **Streamlit Dashboard** | `8501` | `http://localhost:8501` | Web AML UI |
+
+---
+
+## 🛑 Shutting Down Infrastructure
+
+To stop and remove all Docker containers:
+
+```bash
+docker compose -f docker/docker-compose.yml down
+```
+
+  
+
